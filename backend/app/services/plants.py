@@ -6,6 +6,18 @@ from sqlmodel import Session, select
 from app.models import Plant, PlantCreate, PlantUpdate
 from app.services.care_events import log_event
 
+FIELD_LABELS = {
+    "name": "name",
+    "species": "species",
+    "location": "location",
+    "light_need": "light need",
+    "water_frequency_hours": "water frequency",
+    "health_status": "health status",
+    "notes": "notes",
+}
+
+_SEVERITY = {"healthy": 0, "needs_attention": 1, "critical": 2}
+
 
 def _hours_since_watered(plant: Plant) -> float | None:
     if not plant.last_watered:
@@ -19,9 +31,6 @@ def _hours_since_watered(plant: Plant) -> float | None:
         return None
 
 
-_SEVERITY = {"healthy": 0, "needs_attention": 1, "critical": 2}
-
-
 def _refresh_health(session: Session, plant: Plant) -> Plant:
     """Degrade health when overdue; never auto-heal (only watering heals)."""
     hours = _hours_since_watered(plant)
@@ -29,32 +38,42 @@ def _refresh_health(session: Session, plant: Plant) -> Plant:
         return plant
 
     freq = plant.water_frequency_hours
-    overdue_hours = hours - freq
+    overdue = hours - freq
 
-    if overdue_hours > freq * 0.5:
-        new_status = "critical"
-    elif overdue_hours > 0:
-        new_status = "needs_attention"
-    else:
+    if overdue <= 0:
         return plant
 
-    current_severity = _SEVERITY.get(plant.health_status, 0)
-    new_severity = _SEVERITY.get(new_status, 0)
+    new_status = "critical" if overdue > freq * 0.5 else "needs_attention"
 
-    if new_severity > current_severity:
-        old_status = plant.health_status
-        plant.health_status = new_status
-        session.add(plant)
-        log_event(
-            session,
-            plant_id=plant.id,
-            event_type="health_changed",
-            detail=f"{old_status} -> {new_status}",
-        )
-        session.commit()
-        session.refresh(plant)
+    if _SEVERITY.get(new_status, 0) <= _SEVERITY.get(plant.health_status, 0):
+        return plant
 
+    old_status = plant.health_status
+    plant.health_status = new_status
+    session.add(plant)
+    log_event(
+        session,
+        plant_id=plant.id,
+        event_type="health_changed",
+        detail=f"{old_status} -> {new_status}",
+    )
+    session.commit()
+    session.refresh(plant)
     return plant
+
+
+def _log_field_changes(session: Session, plant: Plant, old: dict, new: dict) -> None:
+    """Compare old and new field values; log each changed field as an 'edited' event."""
+    for field, label in FIELD_LABELS.items():
+        old_val = old.get(field)
+        new_val = new.get(field)
+        if old_val != new_val:
+            log_event(
+                session,
+                plant_id=plant.id,
+                event_type="edited",
+                detail=f"{label}: {old_val} -> {new_val}",
+            )
 
 
 def create_plant(session: Session, payload: PlantCreate) -> Plant:
@@ -91,10 +110,14 @@ def update_plant(session: Session, plant_id: int, payload: PlantCreate) -> Plant
     if not db_plant:
         raise HTTPException(status_code=404, detail="Plant not found")
 
-    for key, value in payload.model_dump().items():
+    old_values = {f: getattr(db_plant, f) for f in FIELD_LABELS}
+    new_values = payload.model_dump()
+
+    for key, value in new_values.items():
         setattr(db_plant, key, value)
 
     session.add(db_plant)
+    _log_field_changes(session, db_plant, old_values, new_values)
     session.commit()
     session.refresh(db_plant)
     return db_plant
@@ -106,12 +129,13 @@ def patch_plant(session: Session, plant_id: int, payload: PlantUpdate) -> Plant:
         raise HTTPException(status_code=404, detail="Plant not found")
 
     updates = payload.model_dump(exclude_unset=True)
-
     watering = "last_watered" in updates
 
     if watering and db_plant.health_status in ("needs_attention", "critical"):
         if "health_status" not in updates:
             updates["health_status"] = "healthy"
+
+    old_values = {f: getattr(db_plant, f) for f in FIELD_LABELS if f in updates}
 
     for key, value in updates.items():
         setattr(db_plant, key, value)
@@ -120,6 +144,9 @@ def patch_plant(session: Session, plant_id: int, payload: PlantUpdate) -> Plant:
 
     if watering:
         log_event(session, plant_id=db_plant.id, event_type="watered")
+
+    new_values = {f: updates[f] for f in FIELD_LABELS if f in updates}
+    _log_field_changes(session, db_plant, old_values, new_values)
 
     session.commit()
     session.refresh(db_plant)

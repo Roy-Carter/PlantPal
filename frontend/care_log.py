@@ -9,9 +9,21 @@ import cached_api
 EVENT_ICONS = {
     "watered": "💧",
     "health_changed": "🩺",
+    "edited": "✏️",
     "note": "📝",
 }
 
+EVENT_LABELS = {
+    "watered": "Watered",
+    "health_changed": "Health changed",
+    "edited": "Edited",
+    "note": "Note",
+}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _parse_dt(iso: str) -> datetime | None:
     try:
@@ -33,31 +45,70 @@ def _day_label(dt: datetime) -> str:
     return d.strftime("%b %d, %Y")
 
 
-def _compute_streak(events: list[dict]) -> int:
-    """Consecutive days (ending today or yesterday) with at least one watering."""
-    water_dates: set[str] = set()
-    for e in events:
-        if e.get("event_type") != "watered":
-            continue
-        dt = _parse_dt(e.get("created_at", ""))
-        if dt:
-            water_dates.add(dt.date().isoformat())
+def _relative_time(dt: datetime) -> str:
+    seconds = (datetime.now(timezone.utc) - dt).total_seconds()
+    if seconds < 3600:
+        return f"{int(seconds / 60)} min ago"
+    if seconds < 86400:
+        return f"{int(seconds / 3600)}h ago"
+    return f"{int(seconds / 86400)}d ago"
 
+
+def _compute_streak(events: list[dict]) -> int:
+    """Count consecutive days (ending today or yesterday) with at least one watering."""
+    water_dates = {
+        _parse_dt(e["created_at"]).date()
+        for e in events
+        if e.get("event_type") == "watered" and _parse_dt(e.get("created_at", ""))
+    }
     if not water_dates:
         return 0
 
     day = datetime.now(timezone.utc).date()
-    if day.isoformat() not in water_dates:
+    # Allow streak to start from yesterday if nothing today yet
+    if day not in water_dates:
         day -= timedelta(days=1)
-    if day.isoformat() not in water_dates:
+    if day not in water_dates:
         return 0
 
     streak = 0
-    while day.isoformat() in water_dates:
+    while day in water_dates:
         streak += 1
         day -= timedelta(days=1)
     return streak
 
+
+def _consistency_label(water_events: list[dict], freq_hours: int) -> tuple[str, str]:
+    """Return (label, tooltip) describing how consistently a plant is watered."""
+    count = len(water_events)
+    if count == 0:
+        return "No data yet", "Water this plant a few times to track your rhythm."
+    if count == 1:
+        return "Just started", "Water again to start building a pattern."
+
+    dates = sorted(
+        _parse_dt(e["created_at"])
+        for e in water_events
+        if _parse_dt(e["created_at"])
+    )
+    if len(dates) < 2:
+        return "Just started", "Water again to start building a pattern."
+
+    freq_days = freq_hours / 24
+    gaps = [(dates[i] - dates[i - 1]).total_seconds() / 86400 for i in range(1, len(dates))]
+    avg_gap = sum(gaps) / len(gaps)
+    ratio = avg_gap / freq_days if freq_days > 0 else 0
+
+    if ratio <= 1.1:
+        return "On track", f"You water roughly every {avg_gap:.1f}d (schedule: every {freq_days:.0f}d)."
+    if ratio <= 1.5:
+        return "Slightly late", f"Avg gap is {avg_gap:.1f}d but schedule says every {freq_days:.0f}d."
+    return "Often late", f"Avg gap is {avg_gap:.1f}d — schedule says every {freq_days:.0f}d."
+
+
+# ---------------------------------------------------------------------------
+# Main render
+# ---------------------------------------------------------------------------
 
 def render():
     st.markdown("# 📋 Care Log")
@@ -71,24 +122,19 @@ def render():
         return
 
     plant_map = {p["id"]: p for p in plants}
+    now = datetime.now(timezone.utc)
 
     # -------------------------------------------------------------------
-    # Section 1 — Summary Stats
+    # Section 1 — Summary stats
     # -------------------------------------------------------------------
-    now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 
-    this_week = 0
-    this_month = 0
-    water_counts: Counter = Counter()
+    this_week = sum(1 for e in all_events if (_parse_dt(e.get("created_at", "")) or datetime.min.replace(tzinfo=timezone.utc)) >= week_ago)
+    this_month = sum(1 for e in all_events if (_parse_dt(e.get("created_at", "")) or datetime.min.replace(tzinfo=timezone.utc)) >= month_ago)
 
+    water_counts: Counter = Counter()
     for e in all_events:
-        dt = _parse_dt(e.get("created_at", ""))
-        if dt and dt >= week_ago:
-            this_week += 1
-        if dt and dt >= month_ago:
-            this_month += 1
         if e.get("event_type") == "watered":
             water_counts[e["plant_id"]] += 1
 
@@ -96,51 +142,33 @@ def render():
 
     most_pampered = "—"
     if water_counts:
-        pid = water_counts.most_common(1)[0][0]
-        most_pampered = plant_map.get(pid, {}).get("name", f"#{pid}")
-
-    most_neglected = "—"
-    if water_counts and len(plants) > 1:
-        all_ids = {p["id"] for p in plants}
-        watered_ids = set(water_counts.keys())
-        never_watered = all_ids - watered_ids
-        if never_watered:
-            pid = next(iter(never_watered))
-            most_neglected = plant_map.get(pid, {}).get("name", f"#{pid}")
-        else:
-            pid = water_counts.most_common()[-1][0]
-            most_neglected = plant_map.get(pid, {}).get("name", f"#{pid}")
+        top_id = water_counts.most_common(1)[0][0]
+        most_pampered = plant_map.get(top_id, {}).get("name", "—")
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("This Week", this_week, help="Care actions in the last 7 days")
     m2.metric("This Month", this_month, help="Care actions in the last 30 days")
-    m3.metric("🔥 Streak", f"{streak} day{'s' if streak != 1 else ''}")
-    m4.metric("⭐ Most Pampered", most_pampered)
+    m3.metric("Streak", f"{streak} day{'s' if streak != 1 else ''}")
+    m4.metric("Most Pampered", most_pampered)
 
     st.divider()
 
     # -------------------------------------------------------------------
-    # Section 2 — Activity Timeline
+    # Section 2 — Activity timeline
     # -------------------------------------------------------------------
-    st.markdown("### 🕐 Activity Timeline")
+    st.markdown("### Activity Timeline")
 
     fc1, fc2 = st.columns(2)
     with fc1:
         plant_names = ["All Plants"] + sorted(p["name"] for p in plants)
-        selected_plant_name = st.selectbox(
-            "Filter by plant", plant_names, key="timeline_plant_filter"
-        )
+        selected_plant = st.selectbox("Filter by plant", plant_names, key="tl_plant")
     with fc2:
-        type_options = ["All Types", "watered", "health_changed", "note"]
-        selected_type = st.selectbox(
-            "Filter by event type", type_options, key="timeline_type_filter"
-        )
+        type_options = ["All Types"] + list(EVENT_LABELS.keys())
+        selected_type = st.selectbox("Filter by event type", type_options, key="tl_type")
 
     filtered = all_events
-    if selected_plant_name != "All Plants":
-        pid = next(
-            (p["id"] for p in plants if p["name"] == selected_plant_name), None
-        )
+    if selected_plant != "All Plants":
+        pid = next((p["id"] for p in plants if p["name"] == selected_plant), None)
         if pid is not None:
             filtered = [e for e in filtered if e["plant_id"] == pid]
     if selected_type != "All Types":
@@ -149,41 +177,39 @@ def render():
     if not filtered:
         st.info("No events match your filters.")
     else:
+        # Group events by day
         grouped: defaultdict[str, list] = defaultdict(list)
         for e in filtered:
             dt = _parse_dt(e.get("created_at", ""))
-            label = _day_label(dt) if dt else "Unknown"
-            grouped[label].append((dt, e))
+            grouped[_day_label(dt) if dt else "Unknown"].append((dt, e))
 
         for day_label, items in grouped.items():
             st.markdown(f"**{day_label}**")
             items.sort(key=lambda x: x[0] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
             for dt, e in items:
                 icon = EVENT_ICONS.get(e["event_type"], "📌")
-                time_str = dt.strftime("%H:%M") if dt else ""
+                label = EVENT_LABELS.get(e["event_type"], e["event_type"])
                 pname = e.get("plant_name") or plant_map.get(e["plant_id"], {}).get("name", "?")
                 detail = f" — {e['detail']}" if e.get("detail") else ""
+                time_str = dt.strftime("%H:%M") if dt else ""
 
                 with st.container(border=True):
                     c1, c2 = st.columns([1, 5])
                     with c1:
                         st.markdown(f"### {icon}")
                     with c2:
-                        st.markdown(f"**{pname}** · {e['event_type'].replace('_', ' ')}{detail}")
+                        st.markdown(f"**{pname}** · {label}{detail}")
                         st.caption(time_str)
 
     st.divider()
 
     # -------------------------------------------------------------------
-    # Section 3 — Per-Plant Drilldown
+    # Section 3 — Per-plant drilldown
     # -------------------------------------------------------------------
-    st.markdown("### 🌱 Plant Drilldown")
+    st.markdown("### Plant Drilldown")
 
-    plant_choice = st.selectbox(
-        "Select a plant",
-        [p["name"] for p in plants],
-        key="drilldown_plant",
-    )
+    plant_choice = st.selectbox("Select a plant", [p["name"] for p in plants], key="dd_plant")
     chosen = next((p for p in plants if p["name"] == plant_choice), None)
     if not chosen:
         return
@@ -191,19 +217,8 @@ def render():
     plant_events = [e for e in all_events if e["plant_id"] == chosen["id"]]
     water_events = [e for e in plant_events if e["event_type"] == "watered"]
 
-    total_waterings = len(water_events)
-    if total_waterings >= 2:
-        dates = sorted(
-            _parse_dt(e["created_at"]) for e in water_events if _parse_dt(e["created_at"])
-        )
-        if len(dates) >= 2:
-            gaps = [(dates[i] - dates[i - 1]).total_seconds() / 86400 for i in range(1, len(dates))]
-            avg_gap = sum(gaps) / len(gaps)
-            avg_text = f"{avg_gap:.1f} days"
-        else:
-            avg_text = "—"
-    else:
-        avg_text = "—"
+    freq_hours = chosen.get("water_frequency_hours", 168)
+    consistency_text, consistency_help = _consistency_label(water_events, freq_hours)
 
     last_water_dt = None
     if water_events:
@@ -211,30 +226,23 @@ def render():
             (_parse_dt(e["created_at"]) for e in water_events if _parse_dt(e["created_at"])),
             default=None,
         )
-    if last_water_dt:
-        ago = now - last_water_dt
-        if ago.total_seconds() < 3600:
-            last_text = f"{int(ago.total_seconds() / 60)} min ago"
-        elif ago.total_seconds() < 86400:
-            last_text = f"{int(ago.total_seconds() / 3600)}h ago"
-        else:
-            last_text = f"{int(ago.days)}d ago"
-    else:
-        last_text = "Never"
+    last_text = _relative_time(last_water_dt) if last_water_dt else "Never"
 
     s1, s2, s3 = st.columns(3)
-    s1.metric("Total Waterings", total_waterings)
-    s2.metric("Avg. Interval", avg_text)
+    s1.metric("Total Waterings", len(water_events))
+    s2.metric("Consistency", consistency_text, help=consistency_help)
     s3.metric("Last Watered", last_text)
 
+    # Full history for this plant
     if plant_events:
         st.markdown("#### History")
         for e in plant_events:
             dt = _parse_dt(e.get("created_at", ""))
             icon = EVENT_ICONS.get(e["event_type"], "📌")
-            time_str = dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+            label = EVENT_LABELS.get(e["event_type"], e["event_type"])
             detail = f" — {e['detail']}" if e.get("detail") else ""
-            st.markdown(f"{icon} **{e['event_type'].replace('_', ' ')}**{detail}  \n`{time_str}`")
+            time_str = dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+            st.markdown(f"{icon} **{label}**{detail}  \n`{time_str}`")
     else:
         st.info("No care events recorded for this plant yet.")
 
@@ -243,10 +251,12 @@ def render():
     # -------------------------------------------------------------------
     # Add a care note
     # -------------------------------------------------------------------
-    st.markdown("#### 📝 Add a Care Note")
+    st.markdown("#### Add a Care Note")
     note_text = st.text_area(
-        "Note", placeholder="e.g. Repotted into larger pot, noticed yellowing leaves…",
-        key="care_note_input", max_chars=300,
+        "Note",
+        placeholder="e.g. Repotted into larger pot, noticed yellowing leaves...",
+        key="care_note_input",
+        max_chars=300,
     )
     if st.button("Save Note", type="primary", key="save_care_note"):
         if not note_text.strip():

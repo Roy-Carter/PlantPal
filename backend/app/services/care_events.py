@@ -45,7 +45,7 @@ def create_event(session: Session, payload: CareEventCreate) -> CareEventRead:
         plant_id=payload.plant_id,
         event_type=payload.event_type,
         detail=payload.detail,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=payload.created_at or datetime.now(timezone.utc).isoformat(),
     )
     session.add(db_event)
     session.commit()

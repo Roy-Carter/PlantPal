@@ -193,3 +193,37 @@ def test_health_degradation_logs_care_event(client):
     health_events = [e for e in events if e["event_type"] == "health_changed"]
     assert len(health_events) >= 1
     assert "critical" in health_events[0]["detail"]
+
+
+def test_put_logs_edited_events(client):
+    """PUT with changed fields should log 'edited' care events."""
+    plant_id = client.post("/plants/", json=SAMPLE).json()["id"]
+    updated = {**SAMPLE, "location": "Bedroom", "light_need": "high"}
+    client.put(f"/plants/{plant_id}", json=updated)
+
+    events = client.get("/care-events/", params={"plant_id": plant_id}).json()
+    edits = [e for e in events if e["event_type"] == "edited"]
+    details = {e["detail"] for e in edits}
+    assert "location: Living Room -> Bedroom" in details
+    assert "light need: medium -> high" in details
+
+
+def test_patch_logs_edited_events(client):
+    """PATCH with changed fields should log 'edited' care events."""
+    plant_id = client.post("/plants/", json=SAMPLE).json()["id"]
+    client.patch(f"/plants/{plant_id}", json={"notes": "Updated notes"})
+
+    events = client.get("/care-events/", params={"plant_id": plant_id}).json()
+    edits = [e for e in events if e["event_type"] == "edited"]
+    assert len(edits) == 1
+    assert "notes:" in edits[0]["detail"]
+
+
+def test_patch_unchanged_field_no_event(client):
+    """PATCH with the same value should not create an 'edited' event."""
+    plant_id = client.post("/plants/", json=SAMPLE).json()["id"]
+    client.patch(f"/plants/{plant_id}", json={"location": "Living Room"})
+
+    events = client.get("/care-events/", params={"plant_id": plant_id}).json()
+    edits = [e for e in events if e["event_type"] == "edited"]
+    assert len(edits) == 0

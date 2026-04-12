@@ -53,6 +53,7 @@ class CareEventCreate(SQLModel):
     plant_id: int
     event_type: str = "note"
     detail: str = ""
+    created_at: str | None = None
 
 
 class CareEventRead(SQLModel):

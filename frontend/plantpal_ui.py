@@ -103,6 +103,14 @@ with st.sidebar:
     else:
         st.error("Backend unreachable", icon="🚫")
 
+    st.divider()
+    st.markdown(
+        "<div style='text-align:center; font-size:0.75rem; opacity:0.6;'>"
+        "&copy; 2026 Roy Carter. All rights reserved."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
 # ---------------------------------------------------------------------------
 # Care Log page (delegated)
 # ---------------------------------------------------------------------------
