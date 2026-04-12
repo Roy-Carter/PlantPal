@@ -1,0 +1,174 @@
+/* PlantPal – green / nature dark theme */
+
+:root {
+    --color-primary: #22c55e;
+    --color-primary-dark: #166534;
+    --color-bg: #0f1a12;
+    --color-surface: #1a2e1f;
+    --color-border: #2d4a35;
+    --color-text: #e2e8e4;
+    --color-text-muted: #b0c8b6;
+    --color-danger: #ef4444;
+    --color-warning: #eab308;
+}
+
+/* ===== Global ===== */
+.stApp, .main .block-container {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+}
+
+/* Force light text everywhere Streamlit renders content */
+.stApp p, .stApp span, .stApp label, .stApp li, .stApp div {
+    color: var(--color-text);
+}
+
+/* Markdown text */
+.stMarkdown, .stMarkdown p, .stMarkdown li {
+    color: var(--color-text) !important;
+}
+
+/* Captions (muted but still readable) */
+.stCaption, [data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p {
+    color: var(--color-text-muted) !important;
+}
+
+/* ===== Sidebar ===== */
+section[data-testid="stSidebar"] {
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+}
+
+section[data-testid="stSidebar"] .stMarkdown h2 {
+    color: var(--color-primary);
+}
+
+/* All sidebar text, labels, links, page nav */
+section[data-testid="stSidebar"] * {
+    color: var(--color-text) !important;
+}
+
+section[data-testid="stSidebar"] a {
+    color: var(--color-text-muted) !important;
+    text-decoration: none;
+}
+
+section[data-testid="stSidebar"] a:hover {
+    color: var(--color-primary) !important;
+}
+
+/* ===== Metric cards ===== */
+[data-testid="stMetric"] {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+[data-testid="stMetricLabel"] label,
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricLabel"] div {
+    color: var(--color-text-muted) !important;
+}
+
+[data-testid="stMetricValue"] div {
+    color: var(--color-primary) !important;
+    font-weight: 700;
+}
+
+/* ===== Plant cards ===== */
+[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
+    border-color: var(--color-border) !important;
+    border-radius: 10px;
+    background-color: var(--color-surface);
+}
+
+/* ===== Inputs ===== */
+
+/* Labels */
+.stTextInput label, .stSelectbox label, .stMultiSelect label,
+.stNumberInput label, .stTextArea label, .stSlider label {
+    color: var(--color-text) !important;
+}
+
+/* Text inputs + textareas */
+.stTextInput input, .stNumberInput input, .stTextArea textarea {
+    color: var(--color-text) !important;
+    background-color: var(--color-bg) !important;
+    border-color: var(--color-border) !important;
+}
+
+/* Placeholder text */
+.stTextInput input::placeholder, .stTextArea textarea::placeholder {
+    color: var(--color-text-muted) !important;
+    opacity: 1;
+}
+
+/* Selectbox / multiselect */
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stMultiSelect"] > div > div {
+    background-color: var(--color-bg) !important;
+    color: var(--color-text) !important;
+    border-color: var(--color-border) !important;
+}
+
+/* Dropdown option text */
+[data-baseweb="select"] span,
+[data-baseweb="popover"] li {
+    color: var(--color-text) !important;
+}
+
+/* ===== Buttons ===== */
+.stButton > button[kind="primary"] {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+}
+
+.stButton > button[kind="secondary"],
+.stButton > button {
+    color: var(--color-text) !important;
+    border-color: var(--color-border) !important;
+}
+
+/* Download button */
+.stDownloadButton > button {
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    background-color: var(--color-surface) !important;
+}
+
+.stDownloadButton > button:hover {
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary) !important;
+}
+
+/* ===== Dividers ===== */
+hr {
+    border-color: var(--color-border) !important;
+}
+
+/* ===== Dataframe / table ===== */
+[data-testid="stDataFrame"] {
+    color: var(--color-text);
+}
+
+/* ===== Alerts ===== */
+.stAlert [data-testid="stAlertContentError"] {
+    font-weight: 600;
+}
+
+/* ===== Hide footer, transparent header ===== */
+footer {
+    visibility: hidden;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
