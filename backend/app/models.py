@@ -6,8 +6,8 @@ class PlantBase(SQLModel):
     species: str
     location: str = "Unknown"
     light_need: str = "medium"
-    water_frequency_days: int = 7
-    last_watered: str | None = None
+    water_frequency_hours: int = 168  # default 7 days = 168 hours
+    last_watered: str | None = None  # ISO datetime string
     health_status: str = "healthy"
     image_url: str = ""
     notes: str = ""
@@ -30,7 +30,7 @@ class PlantUpdate(SQLModel):
     species: str | None = None
     location: str | None = None
     light_need: str | None = None
-    water_frequency_days: int | None = None
+    water_frequency_hours: int | None = None
     last_watered: str | None = None
     health_status: str | None = None
     image_url: str | None = None

@@ -3,7 +3,7 @@ SAMPLE = {
     "species": "Monstera deliciosa",
     "location": "Living Room",
     "light_need": "medium",
-    "water_frequency_days": 7,
+    "water_frequency_hours": 168,
     "health_status": "healthy",
     "notes": "Loves humidity",
 }
@@ -77,7 +77,7 @@ def test_create_plant_missing_field(client):
 
 
 def test_create_plant_invalid_type(client):
-    resp = client.post("/plants/", json={**SAMPLE, "water_frequency_days": "weekly"})
+    resp = client.post("/plants/", json={**SAMPLE, "water_frequency_hours": "weekly"})
     assert resp.status_code == 422
 
 
@@ -85,7 +85,10 @@ def test_watering_resets_health_to_healthy(client):
     plant_id = client.post(
         "/plants/", json={**SAMPLE, "health_status": "needs_attention"}
     ).json()["id"]
-    resp = client.patch(f"/plants/{plant_id}", json={"last_watered": "2026-04-12"})
+    resp = client.patch(
+        f"/plants/{plant_id}",
+        json={"last_watered": "2026-04-12T10:00:00+00:00"},
+    )
     assert resp.status_code == 200
     assert resp.json()["health_status"] == "healthy"
 
@@ -96,10 +99,41 @@ def test_watering_keeps_explicit_health_override(client):
     ).json()["id"]
     resp = client.patch(
         f"/plants/{plant_id}",
-        json={"last_watered": "2026-04-12", "health_status": "needs_attention"},
+        json={
+            "last_watered": "2026-04-12T10:00:00+00:00",
+            "health_status": "needs_attention",
+        },
     )
     assert resp.status_code == 200
     assert resp.json()["health_status"] == "needs_attention"
+
+
+def test_overdue_degrades_to_needs_attention(client):
+    """A plant overdue by less than 50% of its frequency becomes needs_attention."""
+    from datetime import datetime, timedelta, timezone
+
+    past = (datetime.now(timezone.utc) - timedelta(hours=180)).isoformat()
+    plant_id = client.post(
+        "/plants/",
+        json={**SAMPLE, "last_watered": past, "water_frequency_hours": 168},
+    ).json()["id"]
+    resp = client.get(f"/plants/{plant_id}")
+    assert resp.status_code == 200
+    assert resp.json()["health_status"] == "needs_attention"
+
+
+def test_overdue_degrades_to_critical(client):
+    """A plant overdue by more than 50% of its frequency becomes critical."""
+    from datetime import datetime, timedelta, timezone
+
+    past = (datetime.now(timezone.utc) - timedelta(hours=300)).isoformat()
+    plant_id = client.post(
+        "/plants/",
+        json={**SAMPLE, "last_watered": past, "water_frequency_hours": 168},
+    ).json()["id"]
+    resp = client.get(f"/plants/{plant_id}")
+    assert resp.status_code == 200
+    assert resp.json()["health_status"] == "critical"
 
 
 def test_create_then_list_persistence(client):

@@ -1,5 +1,5 @@
 import sys
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,8 +16,8 @@ def test_create_then_list_workflow():
         "species": "Monstera deliciosa",
         "location": "Living Room",
         "light_need": "medium",
-        "water_frequency_days": 7,
-        "last_watered": date.today().isoformat(),
+        "water_frequency_hours": 168,
+        "last_watered": datetime.now(timezone.utc).isoformat(),
         "health_status": "healthy",
         "image_url": "",
         "notes": "",
@@ -52,18 +52,22 @@ def test_backend_unreachable_returns_empty():
 
 
 def test_overdue_metric_calculation():
-    """Verify the overdue detection logic used by the dashboard."""
-    today = date.today()
-    old_date = (today - timedelta(days=15)).isoformat()
+    """Verify the overdue detection logic used by the dashboard (hours-based)."""
+    now = datetime.now(timezone.utc)
+    recent = now.isoformat()
+    old = (now - timedelta(hours=200)).isoformat()
 
-    plant_ok = {"last_watered": today.isoformat(), "water_frequency_days": 7}
-    plant_overdue = {"last_watered": old_date, "water_frequency_days": 7}
+    plant_ok = {"last_watered": recent, "water_frequency_hours": 168}
+    plant_overdue = {"last_watered": old, "water_frequency_hours": 168}
 
     def is_overdue(p):
         if not p.get("last_watered"):
             return False
-        days = (today - date.fromisoformat(p["last_watered"])).days
-        return days > p.get("water_frequency_days", 7)
+        watered = datetime.fromisoformat(p["last_watered"])
+        if watered.tzinfo is None:
+            watered = watered.replace(tzinfo=timezone.utc)
+        hours = (now - watered).total_seconds() / 3600
+        return hours > p.get("water_frequency_hours", 168)
 
     assert not is_overdue(plant_ok)
     assert is_overdue(plant_overdue)

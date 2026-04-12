@@ -48,7 +48,7 @@ Seeds 6 sample plants (Monstera, Snake Plant, Pothos, etc.). Idempotent — skip
 | `GET` | `/plants/` | List all plants (`?skip=0&limit=100`) |
 | `GET` | `/plants/{id}` | Get a single plant |
 | `PUT` | `/plants/{id}` | Full update |
-| `PATCH` | `/plants/{id}` | Partial update (e.g. water a plant) |
+| `PATCH` | `/plants/{id}` | Partial update (e.g. water a plant — resets health to healthy) |
 | `DELETE` | `/plants/{id}` | Delete a plant |
 
 ## Project Structure

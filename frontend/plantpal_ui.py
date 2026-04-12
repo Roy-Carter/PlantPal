@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import datetime, timezone
 
 import streamlit as st
 
@@ -39,32 +39,47 @@ HEALTH_BADGES = {
 }
 
 
-def days_since_watered(last_watered: str | None) -> int | None:
+def hours_since_watered(last_watered: str | None) -> float | None:
     if not last_watered:
         return None
     try:
-        watered = date.fromisoformat(last_watered)
-        return (date.today() - watered).days
+        watered = datetime.fromisoformat(last_watered)
+        if watered.tzinfo is None:
+            watered = watered.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - watered
+        return delta.total_seconds() / 3600
     except ValueError:
         return None
 
 
 def is_overdue(plant: dict) -> bool:
-    days = days_since_watered(plant.get("last_watered"))
-    if days is None:
+    hours = hours_since_watered(plant.get("last_watered"))
+    if hours is None:
         return False
-    return days > plant.get("water_frequency_days", 7)
+    return hours > plant.get("water_frequency_hours", 168)
 
 
 def format_relative(last_watered: str | None) -> str:
-    days = days_since_watered(last_watered)
-    if days is None:
+    hours = hours_since_watered(last_watered)
+    if hours is None:
         return "Never"
-    if days == 0:
-        return "Today"
+    if hours < 1:
+        return f"{int(hours * 60)} min ago"
+    if hours < 24:
+        return f"{int(hours)}h ago"
+    days = int(hours / 24)
     if days == 1:
         return "Yesterday"
     return f"{days} days ago"
+
+
+def format_frequency(hours: int) -> str:
+    if hours < 24:
+        return f"Every {hours}h"
+    days = hours / 24
+    if days == int(days):
+        return f"Every {int(days)} days"
+    return f"Every {days:.1f} days"
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +107,7 @@ with st.sidebar:
 # Care Log page (delegated)
 # ---------------------------------------------------------------------------
 if page == "Care Log":
+    st.session_state["_prev_page"] = "Care Log"
     import care_log
 
     care_log.render()
@@ -100,6 +116,13 @@ if page == "Care Log":
 # ---------------------------------------------------------------------------
 # Dashboard page
 # ---------------------------------------------------------------------------
+
+if st.session_state.get("_prev_page") != "Dashboard":
+    for key in list(st.session_state):
+        if key.startswith(("editing_", "confirm_del_")):
+            del st.session_state[key]
+st.session_state["_prev_page"] = "Dashboard"
+
 plants = cached_api.get_plants()
 
 # -- Header row --
@@ -134,7 +157,7 @@ if st.session_state.get("show_add_form"):
             ["Living Room", "Bedroom", "Kitchen", "Bathroom", "Balcony", "Office", "Other"],
         )
         light = st.select_slider("Light Need", options=["low", "medium", "high"], value="medium")
-        freq = st.number_input("Water every (days)", min_value=1, max_value=90, value=7)
+        freq = st.number_input("Water every (hours)", min_value=1, max_value=2160, value=168)
         health = st.selectbox("Health Status", ["healthy", "needs_attention", "critical"])
         notes = st.text_area("Notes", max_chars=300)
 
@@ -149,7 +172,7 @@ if st.session_state.get("show_add_form"):
                         "species": species,
                         "location": location,
                         "light_need": light,
-                        "water_frequency_days": freq,
+                        "water_frequency_hours": freq,
                         "health_status": health,
                         "notes": notes,
                     }
@@ -168,7 +191,7 @@ if st.session_state.get("show_add_form"):
 st.divider()
 fc1, fc2, fc3, fc4 = st.columns([3, 2, 2, 2])
 with fc1:
-    search = st.text_input("🔍 Search", placeholder="Search by name…", label_visibility="collapsed")
+    search = st.text_input("Search", placeholder="Search by name…")
 with fc2:
     locations = sorted({p["location"] for p in plants})
     filter_loc = st.multiselect("Location", locations, placeholder="All locations")
@@ -201,6 +224,7 @@ else:
             plant["health_status"], ("⚪", plant["health_status"])
         )
         light_icon = LIGHT_ICONS.get(plant["light_need"], "")
+        freq_hours = plant.get("water_frequency_hours", 168)
 
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 3])
@@ -225,7 +249,7 @@ else:
                     st.caption(f"💧 Watered: {watered_text}")
 
             with c4:
-                st.markdown(f"Every **{plant['water_frequency_days']}** days")
+                st.markdown(format_frequency(freq_hours))
                 if plant.get("notes"):
                     st.caption(plant["notes"][:60])
 
@@ -235,7 +259,7 @@ else:
                     if st.button("💧", key=f"water_{plant['id']}", help="Water now"):
                         plant_api.patch_plant(
                             plant["id"],
-                            {"last_watered": date.today().isoformat()},
+                            {"last_watered": datetime.now(timezone.utc).isoformat()},
                         )
                         cached_api.clear_cache()
                         st.rerun()
@@ -268,7 +292,7 @@ else:
                     value=p["light_need"],
                 )
                 freq = st.number_input(
-                    "Water every (days)", min_value=1, max_value=90, value=p["water_frequency_days"]
+                    "Water every (hours)", min_value=1, max_value=2160, value=p["water_frequency_hours"]
                 )
                 health = st.selectbox(
                     "Health",
@@ -286,7 +310,7 @@ else:
                                 "species": species,
                                 "location": location,
                                 "light_need": light,
-                                "water_frequency_days": freq,
+                                "water_frequency_hours": freq,
                                 "last_watered": p.get("last_watered", ""),
                                 "health_status": health,
                                 "image_url": p.get("image_url", ""),

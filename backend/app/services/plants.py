@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -6,9 +6,52 @@ from sqlmodel import Session, select
 from app.models import Plant, PlantCreate, PlantUpdate
 
 
+def _hours_since_watered(plant: Plant) -> float | None:
+    if not plant.last_watered:
+        return None
+    try:
+        watered = datetime.fromisoformat(plant.last_watered)
+        if watered.tzinfo is None:
+            watered = watered.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - watered).total_seconds() / 3600
+    except ValueError:
+        return None
+
+
+_SEVERITY = {"healthy": 0, "needs_attention": 1, "critical": 2}
+
+
+def _refresh_health(session: Session, plant: Plant) -> Plant:
+    """Degrade health when overdue; never auto-heal (only watering heals)."""
+    hours = _hours_since_watered(plant)
+    if hours is None:
+        return plant
+
+    freq = plant.water_frequency_hours
+    overdue_hours = hours - freq
+
+    if overdue_hours > freq * 0.5:
+        new_status = "critical"
+    elif overdue_hours > 0:
+        new_status = "needs_attention"
+    else:
+        return plant
+
+    current_severity = _SEVERITY.get(plant.health_status, 0)
+    new_severity = _SEVERITY.get(new_status, 0)
+
+    if new_severity > current_severity:
+        plant.health_status = new_status
+        session.add(plant)
+        session.commit()
+        session.refresh(plant)
+
+    return plant
+
+
 def create_plant(session: Session, payload: PlantCreate) -> Plant:
     if not payload.last_watered:
-        payload.last_watered = date.today().isoformat()
+        payload.last_watered = datetime.now(timezone.utc).isoformat()
 
     if not payload.image_url:
         safe = payload.name.replace(" ", "+")
@@ -24,14 +67,15 @@ def create_plant(session: Session, payload: PlantCreate) -> Plant:
 
 
 def list_plants(session: Session, *, skip: int = 0, limit: int = 100) -> list[Plant]:
-    return list(session.exec(select(Plant).offset(skip).limit(limit)).all())
+    plants = list(session.exec(select(Plant).offset(skip).limit(limit)).all())
+    return [_refresh_health(session, p) for p in plants]
 
 
 def get_plant(session: Session, plant_id: int) -> Plant:
     plant = session.get(Plant, plant_id)
     if not plant:
         raise HTTPException(status_code=404, detail="Plant not found")
-    return plant
+    return _refresh_health(session, plant)
 
 
 def update_plant(session: Session, plant_id: int, payload: PlantCreate) -> Plant:
