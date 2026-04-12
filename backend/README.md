@@ -37,7 +37,7 @@ With the API running:
 uv run python seed.py
 ```
 
-Seeds 6 sample plants (Monstera, Snake Plant, Pothos, etc.). Idempotent — skips if data already exists.
+Seeds 8 sample plants and 30 care events covering every location, light level, and health status. Idempotent — skips if data already exists.
 
 ## API Endpoints
 
@@ -50,19 +50,29 @@ Seeds 6 sample plants (Monstera, Snake Plant, Pothos, etc.). Idempotent — skip
 | `PUT` | `/plants/{id}` | Full update |
 | `PATCH` | `/plants/{id}` | Partial update (e.g. water a plant — resets health to healthy) |
 | `DELETE` | `/plants/{id}` | Delete a plant |
+| `GET` | `/care-events/` | List care events (`?plant_id=&event_type=&limit=50`) |
+| `POST` | `/care-events/` | Create a care event |
 
 ## Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── main.py          # FastAPI app, lifespan, CORS, health
-│   ├── models.py         # SQLModel schemas
-│   ├── db.py             # Engine + session
-│   ├── routers/plants.py # HTTP endpoints
-│   └── services/plants.py# Business logic
-├── tests/                # pytest suite
-├── seed.py               # Sample data loader
-├── pyproject.toml        # Dependencies
+│   ├── main.py                # FastAPI app, lifespan, CORS, health
+│   ├── models.py              # SQLModel schemas (Plant + CareEvent)
+│   ├── db.py                  # Engine + session
+│   ├── routers/
+│   │   ├── plants.py          # /plants CRUD endpoints
+│   │   └── care_events.py     # /care-events endpoints
+│   └── services/
+│       ├── plants.py          # Plant business logic + auto-logging
+│       └── care_events.py     # Care event queries + creation
+├── tests/
+│   ├── conftest.py            # In-memory SQLite fixtures
+│   ├── test_plants.py         # Plant CRUD + auto-logging (23 tests)
+│   ├── test_care_events.py    # Care events API (8 tests)
+│   └── test_smoke.py          # Health / docs smoke tests (3 tests)
+├── seed.py                    # Sample data loader (8 plants + 30 events)
+├── pyproject.toml             # Dependencies
 └── Dockerfile
 ```

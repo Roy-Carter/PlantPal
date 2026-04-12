@@ -26,6 +26,9 @@ def list_events(
     event_type: str | None = None,
     limit: int = 50,
 ) -> list[CareEventRead]:
+    """Return care events in reverse-chronological order, optionally
+    filtered by plant and/or event type.  Each row is enriched with
+    the owning plant's name for display convenience."""
     stmt = select(CareEvent)
     if plant_id is not None:
         stmt = stmt.where(CareEvent.plant_id == plant_id)
@@ -60,7 +63,12 @@ def log_event(
     event_type: str,
     detail: str = "",
 ) -> None:
-    """Internal helper used by the plants service to auto-log events."""
+    """Internal helper used by the plants service to auto-log care events.
+
+    The event is added to the session but **not committed** — the caller
+    is responsible for committing the transaction so that the event and
+    any related plant changes are persisted atomically.
+    """
     db_event = CareEvent(
         plant_id=plant_id,
         event_type=event_type,

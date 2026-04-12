@@ -10,25 +10,32 @@ Manage your houseplant collection, track watering schedules, and monitor plant h
 EASS-HIT/
 ├── backend/                        # FastAPI backend (EX1)
 │   ├── app/
+│   │   ├── main.py                 # FastAPI app, lifespan, CORS, health
 │   │   ├── models.py               # Plant + CareEvent data models
+│   │   ├── db.py                   # SQLite / SQLModel setup
 │   │   ├── routers/
 │   │   │   ├── plants.py           # /plants CRUD endpoints
 │   │   │   └── care_events.py      # /care-events endpoints
-│   │   ├── services/
-│   │   │   ├── plants.py           # Business logic + auto-logging
-│   │   │   └── care_events.py      # Care event queries + creation
-│   │   └── db.py                   # SQLite / SQLModel setup
+│   │   └── services/
+│   │       ├── plants.py           # Business logic + auto-logging
+│   │       └── care_events.py      # Care event queries + creation
 │   ├── tests/                      # 34 pytest tests
+│   │   ├── conftest.py             # In-memory SQLite fixtures
 │   │   ├── test_plants.py          # Plant CRUD + auto-logging
 │   │   ├── test_care_events.py     # Care events API
 │   │   └── test_smoke.py           # Health / docs smoke tests
-│   └── seed.py                     # Sample data loader
+│   ├── seed.py                     # Sample data loader (8 plants + 30 events)
+│   ├── Dockerfile
+│   └── pyproject.toml
 ├── frontend/                       # Streamlit dashboard (EX2)
-│   ├── plantpal_ui.py              # Main entry point
+│   ├── plantpal_ui.py              # Main entry point (Dashboard + Add/Edit/Delete)
 │   ├── plant_api.py                # HTTP client for the backend
-│   ├── cached_api.py               # Cached data layer
-│   ├── care_log.py                 # Care Log page
-│   └── tests/                      # 8 frontend tests
+│   ├── cached_api.py               # Cached data layer with TTL
+│   ├── care_log.py                 # Care Log page (timeline, drilldown, notes)
+│   ├── theme.css                   # Custom green & white theme
+│   ├── tests/
+│   │   └── test_frontend.py        # 8 frontend tests (mocked, no backend needed)
+│   └── requirements.txt
 ├── .env.example
 └── .gitignore
 ```
@@ -92,17 +99,19 @@ python3 -m pytest tests/ -v  # all 8 tests
 
 ## Features
 
-### Backend
+### Backend (EX1)
 
 - Full CRUD for plants (`POST`, `GET`, `PUT`, `PATCH`, `DELETE`)
 - Care Events API (`GET /care-events/`, `POST /care-events/`) with plant and type filters
 - Auto-logging: every watering, health change, and field edit is recorded as a timestamped care event
+- Automatic health degradation when plants are overdue for watering
 - SQLite persistence via SQLModel
 - Health check endpoint (`/health`)
 - CORS middleware for frontend integration
+- 34 pytest tests using in-memory SQLite (no setup required)
 - Seed script with 8 plants and 30 care events covering all field combinations
 
-### Frontend
+### Frontend (EX2)
 
 - **Dashboard** — view all plants with health badges, light indicators, and watering status
 - **Add / Edit / Delete** — full CRUD through dialog forms
@@ -115,7 +124,8 @@ python3 -m pytest tests/ -v  # all 8 tests
   - Add free-text care notes to any plant
   - All edits (name, location, frequency, etc.) appear in the timeline
 - **Search and Filter** — filter by name, location, health, or light need
-- **Export** — download your plant collection as JSON
+- **Export to JSON** — download your plant collection as a JSON file (EX2 small extra)
+- 8 frontend tests using mocks (no backend needed)
 
 ## AI Assistance
 

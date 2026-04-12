@@ -116,7 +116,14 @@ PLANTS = [
 # per-plant drilldown all have data to render.
 
 def _build_care_events(plant_ids: dict[str, int]) -> list[dict]:
-    """Return a list of care event payloads keyed by plant name -> id."""
+    """Build care-event payloads for every seeded plant.
+
+    Each dict contains the standard API fields (``plant_id``,
+    ``event_type``, ``detail``) plus a private ``_ago`` timedelta that
+    ``main()`` converts into an absolute ``created_at`` timestamp before
+    POSTing.  This keeps the data definition readable ("6 days ago")
+    without hard-coding dates.
+    """
     pid = plant_ids
 
     events = [
@@ -204,6 +211,13 @@ def _build_care_events(plant_ids: dict[str, int]) -> list[dict]:
 
 
 def main() -> None:
+    """Seed the running API with sample plants and care events.
+
+    Idempotent: skips entirely if any plants already exist.  Requires
+    the backend to be running at ``API`` (default ``localhost:8000``).
+    Events are sorted chronologically before insertion so the Care Log
+    timeline renders in the expected order.
+    """
     existing = httpx.get(f"{API}/plants/").json()
     if existing:
         print(f"Database already has {len(existing)} plants, skipping seed.")
@@ -221,6 +235,7 @@ def main() -> None:
     print(f"\nSeeded {len(PLANTS)} plants.")
 
     # ── Create care events ────────────────────────────────────────────
+    # Convert relative _ago deltas into absolute ISO timestamps
     events = _build_care_events(plant_ids)
     for e in events:
         ago = e.pop("_ago")

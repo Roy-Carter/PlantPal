@@ -26,6 +26,8 @@ EVENT_LABELS = {
 # ---------------------------------------------------------------------------
 
 def _parse_dt(iso: str) -> datetime | None:
+    """Safely parse an ISO-8601 string into a timezone-aware datetime.
+    Returns None on bad input instead of raising."""
     try:
         dt = datetime.fromisoformat(iso)
         if dt.tzinfo is None:
@@ -79,7 +81,16 @@ def _compute_streak(events: list[dict]) -> int:
 
 
 def _consistency_label(water_events: list[dict], freq_hours: int) -> tuple[str, str]:
-    """Return (label, tooltip) describing how consistently a plant is watered."""
+    """Rate how consistently a plant is watered vs. its schedule.
+
+    Computes the average gap between consecutive waterings and compares
+    it to the expected frequency:
+      * ratio <= 1.1  ->  "On track"
+      * ratio <= 1.5  ->  "Slightly late"
+      * ratio >  1.5  ->  "Often late"
+
+    Returns ``(label, tooltip)`` for display in the drilldown metrics.
+    """
     count = len(water_events)
     if count == 0:
         return "No data yet", "Water this plant a few times to track your rhythm."

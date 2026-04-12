@@ -20,6 +20,8 @@ _SEVERITY = {"healthy": 0, "needs_attention": 1, "critical": 2}
 
 
 def _hours_since_watered(plant: Plant) -> float | None:
+    """Parse ``last_watered`` ISO string and return hours elapsed, or None
+    if the field is empty / unparseable.  Naive datetimes are assumed UTC."""
     if not plant.last_watered:
         return None
     try:
@@ -32,7 +34,16 @@ def _hours_since_watered(plant: Plant) -> float | None:
 
 
 def _refresh_health(session: Session, plant: Plant) -> Plant:
-    """Degrade health when overdue; never auto-heal (only watering heals)."""
+    """Degrade health when overdue; never auto-heal (only watering heals).
+
+    Thresholds (relative to ``water_frequency_hours``):
+      * overdue by 0–50% of frequency  ->  ``needs_attention``
+      * overdue by >50% of frequency   ->  ``critical``
+
+    Health only worsens — if the plant is already at the computed severity
+    or worse, no change is made.  A ``health_changed`` care event is logged
+    whenever the status actually transitions.
+    """
     hours = _hours_since_watered(plant)
     if hours is None:
         return plant
@@ -77,6 +88,9 @@ def _log_field_changes(session: Session, plant: Plant, old: dict, new: dict) -> 
 
 
 def create_plant(session: Session, payload: PlantCreate) -> Plant:
+    """Persist a new plant.  Fills in sensible defaults when the caller
+    omits ``last_watered`` (set to *now*) or ``image_url`` (generated
+    as a DiceBear identicon derived from the plant name)."""
     if not payload.last_watered:
         payload.last_watered = datetime.now(timezone.utc).isoformat()
 
@@ -124,6 +138,12 @@ def update_plant(session: Session, plant_id: int, payload: PlantCreate) -> Plant
 
 
 def patch_plant(session: Session, plant_id: int, payload: PlantUpdate) -> Plant:
+    """Apply a partial update.  Special watering behaviour: when
+    ``last_watered`` is included in the patch and the plant is currently
+    unhealthy, health is automatically reset to ``"healthy"`` unless the
+    caller explicitly provides a different ``health_status``.  A
+    ``"watered"`` care event is logged, and any changed fields produce
+    ``"edited"`` events."""
     db_plant = session.get(Plant, plant_id)
     if not db_plant:
         raise HTTPException(status_code=404, detail="Plant not found")

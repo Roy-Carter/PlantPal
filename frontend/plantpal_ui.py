@@ -40,6 +40,9 @@ HEALTH_BADGES = {
 
 
 def hours_since_watered(last_watered: str | None) -> float | None:
+    """Return hours elapsed since the ISO-8601 ``last_watered`` timestamp,
+    or None if the value is missing or unparseable.  Naive datetimes are
+    treated as UTC."""
     if not last_watered:
         return None
     try:
@@ -53,6 +56,8 @@ def hours_since_watered(last_watered: str | None) -> float | None:
 
 
 def is_overdue(plant: dict) -> bool:
+    """True when more hours have passed since the last watering than the
+    plant's ``water_frequency_hours`` schedule allows."""
     hours = hours_since_watered(plant.get("last_watered"))
     if hours is None:
         return False
