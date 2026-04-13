@@ -104,6 +104,15 @@ def create_plant(session: Session, payload: PlantCreate) -> Plant:
     session.add(db_plant)
     session.commit()
     session.refresh(db_plant)
+
+    log_event(
+        session,
+        plant_id=db_plant.id,
+        event_type="plant_added",
+        detail=f"{db_plant.name} ({db_plant.species})",
+    )
+    session.commit()
+
     return db_plant
 
 

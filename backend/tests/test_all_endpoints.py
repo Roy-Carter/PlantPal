@@ -7,7 +7,7 @@ Classes
 -------
 TestHealth            GET /health               (2 tests)
 TestDocs              GET /docs, /openapi.json   (2 tests)
-TestCreatePlant       POST /plants/              (5 tests)
+TestCreatePlant       POST /plants/              (6 tests)
 TestListPlants        GET /plants/               (5 tests)
 TestGetPlant          GET /plants/{id}           (2 tests)
 TestUpdatePlant       PUT /plants/{id}           (4 tests)
@@ -107,6 +107,13 @@ class TestCreatePlant:
     def test_422_on_wrong_type(self, client):
         bad = {**PLANT_PAYLOAD, "water_frequency_hours": "weekly"}
         assert client.post("/plants/", json=bad).status_code == 422
+
+    def test_logs_plant_added_event(self, client):
+        pid = client.post("/plants/", json=PLANT_PAYLOAD).json()["id"]
+        events = client.get("/care-events/", params={"plant_id": pid}).json()
+        added = [e for e in events if e["event_type"] == "plant_added"]
+        assert len(added) == 1
+        assert "Snake Plant" in added[0]["detail"]
 
 
 # ── GET /plants/ ────────────────────────────────────────────────────
@@ -293,7 +300,7 @@ class TestListCareEvents:
         client.post("/care-events/", json={"plant_id": pid, "event_type": "note", "detail": "a"})
         client.post("/care-events/", json={"plant_id": pid, "event_type": "note", "detail": "b"})
         events = client.get("/care-events/").json()
-        assert len(events) == 2
+        assert len(events) == 3  # 2 notes + 1 auto plant_added
         assert all(CARE_EVENT_FIELDS.issubset(e.keys()) for e in events)
 
     def test_filter_by_plant_id(self, client):
@@ -305,8 +312,8 @@ class TestListCareEvents:
         client.post("/care-events/", json={"plant_id": pid2, "detail": "y"})
 
         events = client.get("/care-events/", params={"plant_id": pid1}).json()
-        assert len(events) == 1
-        assert events[0]["plant_id"] == pid1
+        assert len(events) == 2  # 1 manual note + 1 auto plant_added
+        assert all(e["plant_id"] == pid1 for e in events)
 
     def test_filter_by_event_type(self, client):
         pid = client.post("/plants/", json=PLANT_PAYLOAD).json()["id"]
@@ -368,8 +375,9 @@ class TestCreateCareEvent:
             json={"plant_id": pid, "event_type": "note", "detail": "Repotted"},
         )
         events = client.get("/care-events/").json()
-        assert len(events) == 1
-        assert events[0]["detail"] == "Repotted"
+        assert len(events) == 2  # 1 manual note + 1 auto plant_added
+        details = {e["detail"] for e in events}
+        assert "Repotted" in details
 
     def test_auto_fills_created_at(self, client):
         pid = client.post("/plants/", json=PLANT_PAYLOAD).json()["id"]

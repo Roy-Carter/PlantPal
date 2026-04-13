@@ -71,7 +71,7 @@ backend/
 │       └── care_events.py     # Care event queries + creation
 ├── tests/
 │   ├── conftest.py            # In-memory SQLite fixtures
-│   └── test_all_endpoints.py  # Full endpoint coverage (48 tests)
+│   └── test_all_endpoints.py  # Full endpoint coverage (49 tests)
 ├── seed.py                    # Sample data loader (8 plants + 30 events)
 ├── pyproject.toml             # Dependencies
 └── Dockerfile

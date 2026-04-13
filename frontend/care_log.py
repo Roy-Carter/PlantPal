@@ -7,6 +7,7 @@ import plant_api
 import cached_api
 
 EVENT_ICONS = {
+    "plant_added": "🌱",
     "watered": "💧",
     "health_changed": "🩺",
     "edited": "✏️",
@@ -14,6 +15,7 @@ EVENT_ICONS = {
 }
 
 EVENT_LABELS = {
+    "plant_added": "Plant added",
     "watered": "Watered",
     "health_changed": "Health changed",
     "edited": "Edited",

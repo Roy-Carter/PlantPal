@@ -19,7 +19,7 @@ EASS-HIT/
 │   │   └── services/
 │   │       ├── plants.py           # Business logic + auto-logging
 │   │       └── care_events.py      # Care event queries + creation
-│   ├── tests/                      # 48 pytest tests
+│   ├── tests/                      # 49 pytest tests
 │   │   ├── conftest.py             # In-memory SQLite fixtures
 │   │   └── test_all_endpoints.py   # Full endpoint coverage
 │   ├── seed.py                     # Sample data loader (8 plants + 30 events)
@@ -58,7 +58,7 @@ uv run python seed.py
 Run backend tests:
 
 ```bash
-uv run pytest -v                            # all 48 tests
+uv run pytest -v                            # all 49 tests
 ```
 
 ### 2. Frontend
@@ -116,7 +116,7 @@ python3 -m pytest tests/ -v  # all 10 tests
 - SQLite persistence via SQLModel
 - Health check endpoint (`/health`)
 - CORS middleware for frontend integration
-- 48 pytest tests using in-memory SQLite (no setup required)
+- 49 pytest tests using in-memory SQLite (no setup required)
 - Seed script with 8 plants and 30 care events covering all field combinations
 
 #### API Endpoints
@@ -160,4 +160,4 @@ This project was built with the help of an AI coding agent (Claude / Cursor) for
 - Dashboard layout and styling
 - Documentation
 
-All code was reviewed and tested locally. Backend: 48 tests passing. Frontend: 10 tests passing.
+All code was reviewed and tested locally. Backend: 49 tests passing. Frontend: 10 tests passing.
