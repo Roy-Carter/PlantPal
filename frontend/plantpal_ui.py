@@ -152,8 +152,8 @@ healthy = sum(1 for p in plants if p.get("health_status") == "healthy")
 overdue_count = sum(1 for p in plants if is_overdue(p))
 
 m1, m2, m3 = st.columns(3)
-m1.metric("Total Plants", total)
-m2.metric("Healthy", healthy)
+m1.metric("Total Plants 🌱", total)
+m2.metric("Healthy 🟢", healthy)
 m3.metric("Need Water 💧", overdue_count)
 
 # ---------------------------------------------------------------------------

@@ -159,8 +159,8 @@ def render():
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("This Week", this_week, help="Care actions in the last 7 days")
     m2.metric("This Month", this_month, help="Care actions in the last 30 days")
-    m3.metric("Streak", f"{streak} day{'s' if streak != 1 else ''}")
-    m4.metric("Most Pampered", most_pampered)
+    m3.metric("Streak", f"{streak} day{'s' if streak != 1 else ''}", help="Consecutive days with at least one watering (starting from today or yesterday)")
+    m4.metric("Most Pampered", most_pampered, help="The plant with the most watering events")
 
     st.divider()
 
